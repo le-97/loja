@@ -1,0 +1,39 @@
+name: cold-heartbeat-test
+
+on:
+  workflow_dispatch:
+    inputs:
+      panel_url:
+        description: Panel base URL, for example http://example.test
+        required: true
+        type: string
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Send synthetic Cold heartbeats
+        env:
+          PANEL_URL: ${{ inputs.panel_url }}
+          SOURCE: gh-test-${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${PANEL_URL%/}"
+
+          for sequence in 1 2 3; do
+            tick=$((sequence * 2500))
+            payload=$(printf \
+              '{"source":"%s","tick":%d,"sps":2500,"hits":0,"elapsed":%d}' \
+              "$SOURCE" "$tick" "$sequence")
+
+            curl --fail --show-error --silent \
+              --retry 2 \
+              --max-time 10 \
+              -X POST "$base/api/cold/heartbeat" \
+              -H 'Content-Type: application/json' \
+              --data "$payload"
+            echo "heartbeat source=$SOURCE tick=$tick sps=2500"
+            sleep 2
+          done
